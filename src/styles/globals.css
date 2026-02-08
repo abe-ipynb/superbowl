@@ -1,0 +1,16 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", sans-serif;
+  --color-app: #F3F4F6;
+  --color-card: #FFFFFF;
+  --color-sidebar: #F9FAFB;
+  --color-border: #E5E7EB;
+  --color-up: #16A34A;
+  --color-down: #DC2626;
+  --color-muted: #6B7280;
+}
+
+body {
+  min-height: 100vh;
+}
