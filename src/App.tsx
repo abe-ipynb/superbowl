@@ -1,5 +1,4 @@
 import { useEffect, useRef } from 'react';
-import confetti from 'canvas-confetti';
 import { AppProvider, useAppState, useAppDispatch } from './state/context';
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
@@ -19,7 +18,6 @@ function Dashboard() {
   useKeyboardShortcuts(refresh);
   useFetchHistoryOnPin();
   useQuarterTracker(game);
-  useResolutionConfetti();
 
   return (
     <div className="h-screen flex flex-col overflow-hidden">
@@ -109,65 +107,6 @@ function useQuarterTracker(game: GameScore | null) {
   }, [game, dispatch]);
 }
 
-// Fire confetti when any market resolves (price >= 95¢ or <= 5¢)
-const RESOLVE_HIGH = 0.95;
-const RESOLVE_LOW = 0.05;
-
-function useResolutionConfetti() {
-  const { pinnedGroups } = useAppState();
-  const resolvedRef = useRef(new Set<string>());
-
-  useEffect(() => {
-    let shouldFire = false;
-
-    for (const pg of pinnedGroups) {
-      if (pg.group.markets.length === 1) {
-        const key = pg.group.eventId;
-        const resolved = pg.currentPrice >= RESOLVE_HIGH || pg.currentPrice <= RESOLVE_LOW;
-        if (resolved && !resolvedRef.current.has(key)) {
-          resolvedRef.current.add(key);
-          shouldFire = true;
-        }
-      } else {
-        for (const os of pg.outcomeSeries) {
-          const key = os.marketId;
-          const resolved = os.currentPrice >= RESOLVE_HIGH || os.currentPrice <= RESOLVE_LOW;
-          if (resolved && !resolvedRef.current.has(key)) {
-            resolvedRef.current.add(key);
-            shouldFire = true;
-          }
-        }
-      }
-    }
-
-    if (shouldFire) fireConfetti();
-  }, [pinnedGroups]);
-}
-
-function fireConfetti() {
-  // Burst from both sides
-  confetti({
-    particleCount: 80,
-    spread: 70,
-    origin: { x: 0.2, y: 0.6 },
-    colors: ['#22C55E', '#3B82F6', '#A855F7', '#EAB308', '#EF4444'],
-  });
-  confetti({
-    particleCount: 80,
-    spread: 70,
-    origin: { x: 0.8, y: 0.6 },
-    colors: ['#22C55E', '#3B82F6', '#A855F7', '#EAB308', '#EF4444'],
-  });
-  // Second wave after a short delay
-  setTimeout(() => {
-    confetti({
-      particleCount: 50,
-      spread: 100,
-      origin: { x: 0.5, y: 0.4 },
-      colors: ['#22C55E', '#3B82F6', '#A855F7', '#EAB308', '#EF4444'],
-    });
-  }, 300);
-}
 
 export default function App() {
   return (

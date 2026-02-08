@@ -5,7 +5,19 @@ const CLOB_HISTORY_URL = 'https://clob.polymarket.com/prices-history';
 const CACHE_KEY = 'superbowl-groups';
 const FETCH_TIMEOUT = 10_000;
 
-const SB_KEYWORDS = ['big game', 'super bowl', 'halftime', 'national anthem'];
+const SB_KEYWORDS = ['big game', 'super bowl', 'halftime', 'national anthem', 'bad bunny'];
+
+// Explicitly fetch these event slugs so they always appear in the sidebar
+const MUST_HAVE_SLUGS = [
+  'super-bowl-lx-oddeven-total-points',
+  'pro-football-championship-first-td-scorer-jersey-number',
+  'super-bowl-lx-overtime',
+  'bad-bunny-wears-a-dress-at-the-super-bowl',
+  'will-bad-bunny-say-fuck-ice-at-the-super-bowl',
+  'super-bowl-lx-coin-toss',
+  'super-bowl-lx-coin-toss-team-winner',
+  'super-bowl-lx-coin-toss-winner-and-champion',
+];
 
 interface GammaMarket {
   id: string;
@@ -64,13 +76,25 @@ async function fetchWithTimeout(url: string): Promise<Response> {
 }
 
 export async function fetchSuperBowlMarkets(): Promise<MarketGroup[]> {
-  const url = `${EVENTS_URL}?limit=500&order=volume24hr&ascending=false`;
-  const res = await fetchWithTimeout(url);
-  const events: GammaEvent[] = await res.json();
+  // Fetch the broad volume-sorted list + each must-have slug in parallel
+  const [mainRes, ...slugResults] = await Promise.all([
+    fetchWithTimeout(`${EVENTS_URL}?limit=1000&order=volume24hr&ascending=false`),
+    ...MUST_HAVE_SLUGS.map(slug =>
+      fetchWithTimeout(`${EVENTS_URL}?slug=${slug}`).then(r => r.json() as Promise<GammaEvent[]>).catch(() => [] as GammaEvent[])
+    ),
+  ]);
+  const mainEvents: GammaEvent[] = await mainRes.json();
+
+  // Merge all events, dedup by id
+  const eventMap = new Map<string, GammaEvent>();
+  for (const event of mainEvents) eventMap.set(event.id.toString(), event);
+  for (const slugEvents of slugResults) {
+    for (const event of slugEvents) eventMap.set(event.id.toString(), event);
+  }
 
   const groups: MarketGroup[] = [];
 
-  for (const event of events) {
+  for (const event of eventMap.values()) {
     if (!isSuperBowlEvent(event)) continue;
     const markets = event.markets
       .filter(m => m.active && !m.closed)
