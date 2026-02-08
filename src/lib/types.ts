@@ -43,6 +43,11 @@ export interface PinnedGroup {
   outcomeSeries: OutcomeSeries[];
 }
 
+export interface QuarterMarker {
+  label: string;
+  timestamp: number; // ms
+}
+
 export interface AppState {
   allGroups: MarketGroup[];
   pinnedGroups: PinnedGroup[];
@@ -50,4 +55,5 @@ export interface AppState {
   lastTickTime: number | null;
   sidebarCollapsed: boolean;
   searchQuery: string;
+  quarterMarkers: QuarterMarker[];
 }

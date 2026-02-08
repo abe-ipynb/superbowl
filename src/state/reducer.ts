@@ -1,4 +1,4 @@
-import type { AppState, MarketGroup, PriceTick, PinnedGroup, OutcomeSeries, TimeRange } from '../lib/types';
+import type { AppState, MarketGroup, PriceTick, PinnedGroup, OutcomeSeries, TimeRange, QuarterMarker } from '../lib/types';
 
 const MAX_TICKS = 3600;
 export const MAX_OUTCOMES = 5;
@@ -14,7 +14,8 @@ export type Action =
   | { type: 'SET_WS_STATUS'; status: AppState['wsStatus'] }
   | { type: 'TOGGLE_SIDEBAR' }
   | { type: 'SET_SEARCH_QUERY'; query: string }
-  | { type: 'SET_TIME_RANGE'; eventId: string; timeRange: TimeRange };
+  | { type: 'SET_TIME_RANGE'; eventId: string; timeRange: TimeRange }
+  | { type: 'ADD_QUARTER_MARKER'; marker: QuarterMarker };
 
 export const initialState: AppState = {
   allGroups: [],
@@ -23,6 +24,7 @@ export const initialState: AppState = {
   lastTickTime: null,
   sidebarCollapsed: false,
   searchQuery: '',
+  quarterMarkers: [],
 };
 
 function buildOutcomeSeries(group: MarketGroup): OutcomeSeries[] {
@@ -205,6 +207,10 @@ export function reducer(state: AppState, action: Action): AppState {
 
     case 'SET_SEARCH_QUERY':
       return { ...state, searchQuery: action.query };
+
+    case 'ADD_QUARTER_MARKER':
+      if (state.quarterMarkers.some(m => m.label === action.marker.label)) return state;
+      return { ...state, quarterMarkers: [...state.quarterMarkers, action.marker] };
 
     default:
       return state;

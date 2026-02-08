@@ -14,7 +14,7 @@ const gridClass: Record<number, string> = {
 };
 
 export default function DashboardGrid() {
-  const { pinnedGroups } = useAppState();
+  const { pinnedGroups, quarterMarkers } = useAppState();
   const count = pinnedGroups.length;
 
   if (count === 0) {
@@ -32,7 +32,7 @@ export default function DashboardGrid() {
   return (
     <div className={`flex-1 grid gap-4 p-4 ${gridClass[count] || gridClass[8]}`}>
       {pinnedGroups.map(pinned => (
-        <MarketCard key={pinned.group.eventId} pinned={pinned} />
+        <MarketCard key={pinned.group.eventId} pinned={pinned} quarterMarkers={quarterMarkers} />
       ))}
     </div>
   );

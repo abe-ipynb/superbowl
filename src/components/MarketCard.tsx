@@ -1,5 +1,5 @@
 import { memo, useEffect, useRef, useState } from 'react';
-import type { PinnedGroup, PriceTick, TimeRange } from '../lib/types';
+import type { PinnedGroup, PriceTick, QuarterMarker, TimeRange } from '../lib/types';
 import { useAppDispatch } from '../state/context';
 import { useTimeSeries } from '../hooks/useTimeSeries';
 import { useMultiSeries, COLORS } from '../hooks/useMultiSeries';
@@ -53,9 +53,10 @@ function useSwingFlash(pinned: PinnedGroup): boolean {
 
 interface MarketCardProps {
   pinned: PinnedGroup;
+  quarterMarkers: QuarterMarker[];
 }
 
-const SingleMarketCard = memo(function SingleMarketCard({ pinned }: MarketCardProps) {
+const SingleMarketCard = memo(function SingleMarketCard({ pinned, quarterMarkers }: MarketCardProps) {
   const dispatch = useAppDispatch();
   const chartRef = useRef<HTMLDivElement>(null);
   const lead = pinned.group.markets[0];
@@ -63,7 +64,7 @@ const SingleMarketCard = memo(function SingleMarketCard({ pinned }: MarketCardPr
   const isUp = pinned.currentPrice >= pinned.sessionOpenPrice;
   const flash = useSwingFlash(pinned);
 
-  useTimeSeries(chartRef, pinned);
+  useTimeSeries(chartRef, pinned, quarterMarkers);
 
   return (
     <div className={`border border-border rounded-xl p-4 flex flex-col overflow-hidden shadow-sm transition-colors duration-500 ${
@@ -106,13 +107,13 @@ const SingleMarketCard = memo(function SingleMarketCard({ pinned }: MarketCardPr
   );
 });
 
-const MultiMarketCard = memo(function MultiMarketCard({ pinned }: MarketCardProps) {
+const MultiMarketCard = memo(function MultiMarketCard({ pinned, quarterMarkers }: MarketCardProps) {
   const dispatch = useAppDispatch();
   const chartRef = useRef<HTMLDivElement>(null);
   const { outcomeSeries } = pinned;
   const flash = useSwingFlash(pinned);
 
-  useMultiSeries(chartRef, outcomeSeries, pinned.timeRange);
+  useMultiSeries(chartRef, outcomeSeries, pinned.timeRange, quarterMarkers);
 
   return (
     <div className={`border border-border rounded-xl p-4 flex flex-col overflow-hidden shadow-sm transition-colors duration-500 ${
@@ -162,9 +163,9 @@ const MultiMarketCard = memo(function MultiMarketCard({ pinned }: MarketCardProp
   );
 });
 
-export default memo(function MarketCard({ pinned }: MarketCardProps) {
+export default memo(function MarketCard({ pinned, quarterMarkers }: MarketCardProps) {
   if (pinned.group.markets.length === 1) {
-    return <SingleMarketCard pinned={pinned} />;
+    return <SingleMarketCard pinned={pinned} quarterMarkers={quarterMarkers} />;
   }
-  return <MultiMarketCard pinned={pinned} />;
+  return <MultiMarketCard pinned={pinned} quarterMarkers={quarterMarkers} />;
 });

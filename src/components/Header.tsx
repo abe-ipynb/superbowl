@@ -1,14 +1,14 @@
 import { useAppDispatch } from '../state/context';
-import { useGameScore } from '../hooks/useGameScore';
 import { formatGameClock } from '../lib/espn';
+import type { GameScore } from '../lib/espn';
 
 interface HeaderProps {
   onRefresh: () => void;
+  game: GameScore | null;
 }
 
-export default function Header({ onRefresh }: HeaderProps) {
+export default function Header({ onRefresh, game }: HeaderProps) {
   const dispatch = useAppDispatch();
-  const game = useGameScore();
   return (
     <header className="relative overflow-hidden bg-gradient-to-r from-indigo-950 via-purple-900 to-indigo-950 px-8 py-4">
       {/* Decorative background elements */}

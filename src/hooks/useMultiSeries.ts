@@ -1,6 +1,6 @@
 import { useEffect, useRef, type RefObject } from 'react';
 import { createChart, LineSeries, type IChartApi, type ISeriesApi, type UTCTimestamp } from 'lightweight-charts';
-import type { OutcomeSeries, TimeRange } from '../lib/types';
+import type { OutcomeSeries, TimeRange, QuarterMarker } from '../lib/types';
 import { etTickFormatter, etTooltipFormatter } from '../lib/timeFormat';
 import { dedupTicks } from '../lib/chartUtils';
 
@@ -13,7 +13,7 @@ interface SeriesState {
   lastTime: number;
 }
 
-export function useMultiSeries(containerRef: RefObject<HTMLDivElement | null>, outcomeSeries: OutcomeSeries[], timeRange: TimeRange = 'live') {
+export function useMultiSeries(containerRef: RefObject<HTMLDivElement | null>, outcomeSeries: OutcomeSeries[], timeRange: TimeRange = 'live', quarterMarkers: QuarterMarker[] = []) {
   const chartRef = useRef<IChartApi | null>(null);
   const seriesMapRef = useRef<Map<string, SeriesState>>(new Map());
 
@@ -130,11 +130,31 @@ export function useMultiSeries(containerRef: RefObject<HTMLDivElement | null>, o
       }
     }
 
+    // Quarter markers on first series
+    if (quarterMarkers.length > 0) {
+      const firstState = seriesMapRef.current.values().next().value;
+      if (firstState) {
+        try {
+          const markers = quarterMarkers
+            .map(m => ({
+              time: Math.floor(m.timestamp / 1000) as UTCTimestamp,
+              position: 'aboveBar' as const,
+              color: '#8B5CF6',
+              shape: 'circle' as const,
+              text: m.label,
+              size: 1,
+            }))
+            .sort((a, b) => (a.time as number) - (b.time as number));
+          firstState.series.setMarkers(markers);
+        } catch { /* ignore if markers outside data range */ }
+      }
+    }
+
     // For non-live modes, keep the full historical range visible
     if (timeRange !== 'live' && chart) {
       chart.timeScale().fitContent();
     }
-  }, [outcomeSeries, timeRange]);
+  }, [outcomeSeries, timeRange, quarterMarkers]);
 }
 
 export { COLORS };
