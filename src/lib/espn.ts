@@ -1,7 +1,7 @@
 const SCOREBOARD_URL = 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard';
 const GAME_ID = '401772988';
 const POLL_INTERVAL_PRE = 60_000;   // 1 min before game
-const POLL_INTERVAL_LIVE = 15_000;  // 15s during game
+const POLL_INTERVAL_LIVE = 10_000;  // 10s during game
 const POLL_INTERVAL_FINAL = 0;      // stop polling
 
 export interface TeamInfo {
