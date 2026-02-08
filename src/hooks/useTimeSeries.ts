@@ -1,5 +1,5 @@
 import { useEffect, useRef, type RefObject } from 'react';
-import { createChart, AreaSeries, type IChartApi, type ISeriesApi, type UTCTimestamp } from 'lightweight-charts';
+import { createChart, AreaSeries, MismatchDirection, type IChartApi, type ISeriesApi, type IPriceLine, type UTCTimestamp } from 'lightweight-charts';
 import type { PinnedGroup, QuarterMarker } from '../lib/types';
 import { etTickFormatter, etTooltipFormatter } from '../lib/timeFormat';
 import { dedupTicks } from '../lib/chartUtils';
@@ -10,6 +10,7 @@ export function useTimeSeries(containerRef: RefObject<HTMLDivElement | null>, pi
   const lastLenRef = useRef(0);
   const firstTsRef = useRef(0);
   const lastTimeRef = useRef(0);
+  const tempPriceLineRef = useRef<IPriceLine | null>(null);
 
   // Create chart once
   useEffect(() => {
@@ -42,7 +43,7 @@ export function useTimeSeries(containerRef: RefObject<HTMLDivElement | null>, pi
         timeFormatter: etTooltipFormatter,
       },
       crosshair: {
-        horzLine: { color: '#9CA3AF' },
+        horzLine: { color: '#9CA3AF', labelVisible: false },
         vertLine: { color: '#9CA3AF' },
       },
     });
@@ -67,6 +68,49 @@ export function useTimeSeries(containerRef: RefObject<HTMLDivElement | null>, pi
     lastLenRef.current = 0;
     firstTsRef.current = 0;
     lastTimeRef.current = 0;
+
+    // Guard: applyOptions triggers _internal_updateCrosshair which re-fires
+    // this handler, causing infinite recursion without a re-entrancy guard.
+    let inHandler = false;
+    chart.subscribeCrosshairMove((param) => {
+      if (inHandler) return;
+      inHandler = true;
+      try {
+        const s = seriesRef.current;
+        if (!s) return;
+
+        // Remove previous temp price line
+        if (tempPriceLineRef.current) {
+          try { s.removePriceLine(tempPriceLineRef.current); } catch { /* already removed */ }
+          tempPriceLineRef.current = null;
+        }
+
+        if (param.time && param.logical !== undefined) {
+          // Hide live labels
+          s.applyOptions({ lastValueVisible: false, priceLineVisible: false });
+
+          // Create colored price label at hovered time
+          const data = s.dataByIndex(param.logical, MismatchDirection.NearestLeft);
+          if (data && 'value' in data) {
+            const opts = s.options();
+            const color = (opts as { lineColor?: string }).lineColor || '#16A34A';
+            tempPriceLineRef.current = s.createPriceLine({
+              price: (data as { value: number }).value,
+              color: color,
+              lineVisible: false,
+              axisLabelVisible: true,
+              axisLabelColor: color,
+              axisLabelTextColor: '#FFFFFF',
+            });
+          }
+        } else {
+          // Mouse left chart — restore live labels
+          s.applyOptions({ lastValueVisible: true, priceLineVisible: true });
+        }
+      } finally {
+        inHandler = false;
+      }
+    });
 
     const ro = new ResizeObserver(entries => {
       for (const entry of entries) {

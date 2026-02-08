@@ -1,5 +1,5 @@
 import { useEffect, useRef, type RefObject } from 'react';
-import { createChart, LineSeries, type IChartApi, type ISeriesApi, type UTCTimestamp } from 'lightweight-charts';
+import { createChart, LineSeries, MismatchDirection, type IChartApi, type ISeriesApi, type IPriceLine, type UTCTimestamp } from 'lightweight-charts';
 import type { OutcomeSeries, TimeRange, QuarterMarker } from '../lib/types';
 import { etTickFormatter, etTooltipFormatter } from '../lib/timeFormat';
 import { dedupTicks } from '../lib/chartUtils';
@@ -16,6 +16,7 @@ interface SeriesState {
 export function useMultiSeries(containerRef: RefObject<HTMLDivElement | null>, outcomeSeries: OutcomeSeries[], timeRange: TimeRange = 'live', quarterMarkers: QuarterMarker[] = []) {
   const chartRef = useRef<IChartApi | null>(null);
   const seriesMapRef = useRef<Map<string, SeriesState>>(new Map());
+  const tempPriceLinesRef = useRef<Map<string, { series: ISeriesApi<'Line'>; line: IPriceLine }>>(new Map());
 
   // Create chart once
   useEffect(() => {
@@ -48,12 +49,65 @@ export function useMultiSeries(containerRef: RefObject<HTMLDivElement | null>, o
         timeFormatter: etTooltipFormatter,
       },
       crosshair: {
-        horzLine: { color: '#9CA3AF' },
+        horzLine: { color: '#9CA3AF', labelVisible: false },
         vertLine: { color: '#9CA3AF' },
       },
     });
 
     chartRef.current = chart;
+
+    // Guard: applyOptions triggers _internal_updateCrosshair which re-fires
+    // this handler, causing infinite recursion without a re-entrancy guard.
+    let inHandler = false;
+    chart.subscribeCrosshairMove((param) => {
+      if (inHandler) return;
+      inHandler = true;
+      try {
+        const sMap = seriesMapRef.current;
+        const tempLines = tempPriceLinesRef.current;
+
+        // Remove previous temp price lines
+        for (const [, { series, line }] of tempLines) {
+          try { series.removePriceLine(line); } catch { /* already removed */ }
+        }
+        tempLines.clear();
+
+        if (param.time && param.logical !== undefined) {
+          // Hide live labels on all series
+          for (const state of sMap.values()) {
+            state.series.applyOptions({ lastValueVisible: false, priceLineVisible: false });
+          }
+
+          // Create colored price labels for each series at hovered time.
+          // param.seriesData may only contain the nearest series, so use
+          // dataByIndex on each series to get values for all lines.
+          let i = 0;
+          for (const [marketId, state] of sMap) {
+            const data = state.series.dataByIndex(param.logical, MismatchDirection.NearestLeft);
+            if (data && 'value' in data) {
+              const color = COLORS[i % COLORS.length];
+              const priceLine = state.series.createPriceLine({
+                price: (data as { value: number }).value,
+                color: color,
+                lineVisible: false,
+                axisLabelVisible: true,
+                axisLabelColor: color,
+                axisLabelTextColor: '#FFFFFF',
+              });
+              tempLines.set(marketId, { series: state.series, line: priceLine });
+            }
+            i++;
+          }
+        } else {
+          // Mouse left chart — restore live labels
+          for (const state of sMap.values()) {
+            state.series.applyOptions({ lastValueVisible: true, priceLineVisible: true });
+          }
+        }
+      } finally {
+        inHandler = false;
+      }
+    });
 
     const ro = new ResizeObserver(entries => {
       for (const entry of entries) {
@@ -68,6 +122,7 @@ export function useMultiSeries(containerRef: RefObject<HTMLDivElement | null>, o
       chart.remove();
       chartRef.current = null;
       seriesMapRef.current.clear();
+      tempPriceLinesRef.current.clear();
     };
   }, [containerRef]);
 
