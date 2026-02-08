@@ -26,26 +26,55 @@ export class PolymarketWS {
 
     ws.onopen = () => {
       this.backoff = 1000;
-      this.onStatus('connected');
       this.ws = ws;
-      for (const id of this.subscriptions) {
-        this.sendSubscribe(id);
+
+      // Required initial handshake
+      ws.send(JSON.stringify({ assets_ids: [], type: 'market' }));
+
+      // Re-subscribe all tracked assets
+      if (this.subscriptions.size > 0) {
+        ws.send(JSON.stringify({
+          operation: 'subscribe',
+          assets_ids: Array.from(this.subscriptions),
+        }));
       }
+
+      this.onStatus('connected');
       this.startHeartbeat();
     };
 
     ws.onmessage = (event) => {
       try {
-        const msgs = JSON.parse(event.data);
+        const raw = typeof event.data === 'string' ? event.data : event.data.toString();
+        if (raw === 'PONG' || raw === 'pong') return;
+
+        const msgs = JSON.parse(raw);
         const list = Array.isArray(msgs) ? msgs : [msgs];
-        for (const data of list) {
-          if (data.asset_id && data.price) {
-            const ts = data.timestamp ? new Date(data.timestamp).getTime() : Date.now();
-            this.onPrice(data.asset_id, parseFloat(data.price), ts);
+
+        for (const msg of list) {
+          if (!msg.event_type) continue;
+
+          if (msg.event_type === 'last_trade_price') {
+            // Direct trade execution — most useful for live price
+            const ts = msg.timestamp ? parseInt(msg.timestamp) : Date.now();
+            this.onPrice(msg.asset_id, parseFloat(msg.price), ts);
+          } else if (msg.event_type === 'price_change' && msg.price_changes) {
+            // Order book price changes — use mid of best bid/ask
+            const ts = msg.timestamp ? parseInt(msg.timestamp) : Date.now();
+            for (const pc of msg.price_changes) {
+              const bid = parseFloat(pc.best_bid);
+              const ask = parseFloat(pc.best_ask);
+              if (bid > 0 && ask > 0) {
+                const mid = (bid + ask) / 2;
+                this.onPrice(pc.asset_id, mid, ts);
+              } else if (pc.price) {
+                this.onPrice(pc.asset_id, parseFloat(pc.price), ts);
+              }
+            }
           }
         }
       } catch {
-        // ignore non-JSON messages (pong, etc)
+        // ignore non-JSON messages
       }
     };
 
@@ -73,7 +102,7 @@ export class PolymarketWS {
   private startHeartbeat() {
     this.heartbeatTimer = setInterval(() => {
       if (this.ws?.readyState === WebSocket.OPEN) {
-        this.ws.send(JSON.stringify({ type: 'ping' }));
+        this.ws.send('PING');
       }
     }, 30000);
   }
@@ -85,19 +114,24 @@ export class PolymarketWS {
     }
   }
 
-  private sendSubscribe(clobTokenId: string) {
-    if (this.ws?.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify({ type: 'market', assets_id: clobTokenId }));
-    }
-  }
-
   subscribe(clobTokenId: string) {
     this.subscriptions.add(clobTokenId);
-    this.sendSubscribe(clobTokenId);
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({
+        operation: 'subscribe',
+        assets_ids: [clobTokenId],
+      }));
+    }
   }
 
   unsubscribe(clobTokenId: string) {
     this.subscriptions.delete(clobTokenId);
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({
+        operation: 'unsubscribe',
+        assets_ids: [clobTokenId],
+      }));
+    }
   }
 
   destroy() {

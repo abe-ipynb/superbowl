@@ -96,19 +96,29 @@ export function getCachedGroups(): MarketGroup[] | null {
   return cached ? JSON.parse(cached) : null;
 }
 
-const RANGE_PARAMS: Record<TimeRange, { interval: string; fidelity: number }> = {
-  '1d': { interval: '1d', fidelity: 1 },
+const RANGE_PARAMS: Record<string, { interval: string; fidelity: number }> = {
+  'live': { interval: '1h', fidelity: 1 },
+  '1h': { interval: '1h', fidelity: 1 },
+  '1d': { interval: '1d', fidelity: 5 },
   '1w': { interval: '1w', fidelity: 60 },
   '1m': { interval: '1m', fidelity: 360 },
 };
+
+const LIVE_WINDOW = 10 * 60 * 1000; // 10 minutes
 
 export async function fetchPriceHistory(clobTokenId: string, range: TimeRange = '1w'): Promise<PriceTick[]> {
   const { interval, fidelity } = RANGE_PARAMS[range];
   const url = `${CLOB_HISTORY_URL}?market=${clobTokenId}&interval=${interval}&fidelity=${fidelity}`;
   const res = await fetchWithTimeout(url);
   const data: { history: { t: number; p: number }[] } = await res.json();
-  return data.history.map(h => ({
+  let ticks = data.history.map(h => ({
     price: h.p,
     timestamp: h.t * 1000,
   }));
+  if (range === 'live') {
+    const cutoff = Date.now() - LIVE_WINDOW;
+    const recent = ticks.filter(t => t.timestamp >= cutoff);
+    ticks = recent.length >= 2 ? recent : ticks.slice(-5);
+  }
+  return ticks;
 }

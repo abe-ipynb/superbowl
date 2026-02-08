@@ -1,6 +1,6 @@
 import { useEffect, useRef, type RefObject } from 'react';
 import { createChart, LineSeries, type IChartApi, type ISeriesApi, type UTCTimestamp } from 'lightweight-charts';
-import type { OutcomeSeries } from '../lib/types';
+import type { OutcomeSeries, TimeRange } from '../lib/types';
 import { etTickFormatter, etTooltipFormatter } from '../lib/timeFormat';
 import { dedupTicks } from '../lib/chartUtils';
 
@@ -13,7 +13,7 @@ interface SeriesState {
   lastTime: number;
 }
 
-export function useMultiSeries(containerRef: RefObject<HTMLDivElement | null>, outcomeSeries: OutcomeSeries[]) {
+export function useMultiSeries(containerRef: RefObject<HTMLDivElement | null>, outcomeSeries: OutcomeSeries[], timeRange: TimeRange = 'live') {
   const chartRef = useRef<IChartApi | null>(null);
   const seriesMapRef = useRef<Map<string, SeriesState>>(new Map());
 
@@ -129,7 +129,12 @@ export function useMultiSeries(containerRef: RefObject<HTMLDivElement | null>, o
         state.lastTime = 0;
       }
     }
-  }, [outcomeSeries]);
+
+    // For non-live modes, keep the full historical range visible
+    if (timeRange !== 'live' && chart) {
+      chart.timeScale().fitContent();
+    }
+  }, [outcomeSeries, timeRange]);
 }
 
 export { COLORS };

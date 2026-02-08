@@ -30,7 +30,7 @@ export interface OutcomeSeries {
   currentPrice: number;
 }
 
-export type TimeRange = '1d' | '1w' | '1m';
+export type TimeRange = 'live' | '1h' | '1d' | '1w' | '1m';
 
 export interface PinnedGroup {
   group: MarketGroup;

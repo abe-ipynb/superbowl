@@ -63,18 +63,25 @@ export function reducer(state: AppState, action: Action): AppState {
           if (newSeries.length > MAX_TICKS) newSeries = newSeries.slice(-MAX_TICKS);
           return { ...pg, timeSeries: newSeries, currentPrice: newPrice };
         }
-        // Multi-market: update each outcome
-        let osChanged = false;
+        // Multi-market: check if any outcome changed
+        let anyOsChanged = false;
+        for (const os of pg.outcomeSeries) {
+          const newPrice = priceMap.get(os.marketId);
+          if (newPrice !== undefined && newPrice !== os.currentPrice) {
+            anyOsChanged = true;
+            break;
+          }
+        }
+        if (!anyOsChanged) return pg;
+        changed = true;
+        // Add ticks for ALL outcomes so lines stay in sync
         const newOs = pg.outcomeSeries.map(os => {
           const newPrice = priceMap.get(os.marketId);
-          if (newPrice === undefined || newPrice === os.currentPrice) return os;
-          osChanged = true;
-          let newTicks = [...os.ticks, { price: newPrice, timestamp: now }];
+          const price = (newPrice !== undefined) ? newPrice : os.currentPrice;
+          let newTicks = [...os.ticks, { price, timestamp: now }];
           if (newTicks.length > MAX_TICKS) newTicks = newTicks.slice(-MAX_TICKS);
-          return { ...os, ticks: newTicks, currentPrice: newPrice };
+          return { ...os, ticks: newTicks, currentPrice: price };
         });
-        if (!osChanged) return pg;
-        changed = true;
         return { ...pg, outcomeSeries: newOs };
       });
       if (!changed) return state;
@@ -89,7 +96,7 @@ export function reducer(state: AppState, action: Action): AppState {
       const isMulti = action.group.markets.length > 1;
       const pinned: PinnedGroup = {
         group: action.group,
-        timeRange: '1w',
+        timeRange: 'live',
         timeSeries: [{ price, timestamp: Date.now() }],
         sessionOpenPrice: price,
         currentPrice: price,
@@ -151,15 +158,18 @@ export function reducer(state: AppState, action: Action): AppState {
           if (newSeries.length > MAX_TICKS) newSeries = newSeries.slice(-MAX_TICKS);
           return { ...pg, timeSeries: newSeries, currentPrice: action.tick.price };
         }
-        // Multi-market: match any tracked outcome
+        // Multi-market: match any tracked outcome, add flat ticks for all others
         const osIdx = pg.outcomeSeries.findIndex(o => o.tokenId === action.clobTokenId);
         if (osIdx === -1) return pg;
         changed = true;
-        const os = pg.outcomeSeries[osIdx];
-        let newTicks = [...os.ticks, action.tick];
-        if (newTicks.length > MAX_TICKS) newTicks = newTicks.slice(-MAX_TICKS);
-        const newOs = [...pg.outcomeSeries];
-        newOs[osIdx] = { ...os, ticks: newTicks, currentPrice: action.tick.price };
+        const newOs = pg.outcomeSeries.map((os, i) => {
+          const tick = i === osIdx
+            ? action.tick
+            : { price: os.currentPrice, timestamp: action.tick.timestamp };
+          let newTicks = [...os.ticks, tick];
+          if (newTicks.length > MAX_TICKS) newTicks = newTicks.slice(-MAX_TICKS);
+          return { ...os, ticks: newTicks, currentPrice: tick.price };
+        });
         return { ...pg, outcomeSeries: newOs };
       });
       if (!changed) return state;

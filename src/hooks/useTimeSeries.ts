@@ -105,6 +105,9 @@ export function useTimeSeries(containerRef: RefObject<HTMLDivElement | null>, pi
         lastLenRef.current = timeSeries.length;
         firstTsRef.current = firstTs;
         lastTimeRef.current = data.length > 0 ? (data[data.length - 1].time as number) : 0;
+        if (pinned.timeRange !== 'live' && chartRef.current) {
+          chartRef.current.timeScale().fitContent();
+        }
       } else if (timeSeries.length > lastLenRef.current) {
         for (let i = lastLenRef.current; i < timeSeries.length; i++) {
           const time = Math.floor(timeSeries[i].timestamp / 1000) as UTCTimestamp;
@@ -114,6 +117,9 @@ export function useTimeSeries(containerRef: RefObject<HTMLDivElement | null>, pi
           }
         }
         lastLenRef.current = timeSeries.length;
+        if (pinned.timeRange !== 'live' && chartRef.current) {
+          chartRef.current.timeScale().fitContent();
+        }
       }
     } catch (e) {
       // Recovery: full setData on next render
