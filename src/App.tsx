@@ -8,12 +8,14 @@ import { useGammaMarkets } from './hooks/useGammaMarkets';
 import { usePolymarketWS } from './hooks/usePolymarketWS';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { fetchPriceHistory } from './lib/gamma';
+import { playAlert } from './lib/sounds';
 
 function Dashboard() {
   const { refresh } = useGammaMarkets();
   usePolymarketWS();
   useKeyboardShortcuts(refresh);
   useFetchHistoryOnPin();
+  usePriceAlerts();
 
   return (
     <div className="h-screen flex flex-col overflow-hidden">
@@ -61,6 +63,50 @@ function useFetchHistoryOnPin() {
       }
     }
   }, [pinnedGroups, dispatch]);
+}
+
+const ALERT_THRESHOLD = 0.03; // 3¢ move triggers sound
+
+function usePriceAlerts() {
+  const { pinnedGroups } = useAppState();
+  const prevRef = useRef(new Map<string, number>());
+  const initRef = useRef(false);
+
+  useEffect(() => {
+    // Skip the first render to avoid alerts on initial load
+    if (!initRef.current) {
+      for (const pg of pinnedGroups) {
+        if (pg.group.markets.length === 1) {
+          prevRef.current.set(pg.group.eventId, pg.currentPrice);
+        } else {
+          for (const os of pg.outcomeSeries) {
+            prevRef.current.set(os.marketId, os.currentPrice);
+          }
+        }
+      }
+      initRef.current = true;
+      return;
+    }
+
+    for (const pg of pinnedGroups) {
+      if (pg.group.markets.length === 1) {
+        const key = pg.group.eventId;
+        const prev = prevRef.current.get(key);
+        if (prev !== undefined && Math.abs(pg.currentPrice - prev) >= ALERT_THRESHOLD) {
+          playAlert();
+        }
+        prevRef.current.set(key, pg.currentPrice);
+      } else {
+        for (const os of pg.outcomeSeries) {
+          const prev = prevRef.current.get(os.marketId);
+          if (prev !== undefined && Math.abs(os.currentPrice - prev) >= ALERT_THRESHOLD) {
+            playAlert();
+          }
+          prevRef.current.set(os.marketId, os.currentPrice);
+        }
+      }
+    }
+  }, [pinnedGroups]);
 }
 
 export default function App() {

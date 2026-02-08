@@ -2,6 +2,7 @@ import { useEffect, useRef, type RefObject } from 'react';
 import { createChart, LineSeries, type IChartApi, type ISeriesApi, type UTCTimestamp } from 'lightweight-charts';
 import type { OutcomeSeries } from '../lib/types';
 import { etTickFormatter, etTooltipFormatter } from '../lib/timeFormat';
+import { dedupTicks } from '../lib/chartUtils';
 
 const COLORS = ['#2563EB', '#DC2626', '#16A34A', '#D97706', '#7C3AED'];
 
@@ -9,6 +10,7 @@ interface SeriesState {
   series: ISeriesApi<'Line'>;
   lastLen: number;
   firstTs: number;
+  lastTime: number;
 }
 
 export function useMultiSeries(containerRef: RefObject<HTMLDivElement | null>, outcomeSeries: OutcomeSeries[]) {
@@ -34,6 +36,7 @@ export function useMultiSeries(containerRef: RefObject<HTMLDivElement | null>, o
       height: el.clientHeight,
       rightPriceScale: {
         borderColor: '#E5E7EB',
+        scaleMargins: { top: 0, bottom: 0 },
       },
       timeScale: {
         timeVisible: true,
@@ -89,9 +92,10 @@ export function useMultiSeries(containerRef: RefObject<HTMLDivElement | null>, o
           },
           autoscaleInfoProvider: () => ({
             priceRange: { minValue: 0, maxValue: 1 },
+            margins: { above: 0, below: 0 },
           }),
         });
-        state = { series, lastLen: 0, firstTs: 0 };
+        state = { series, lastLen: 0, firstTs: 0, lastTime: 0 };
         seriesMapRef.current.set(os.marketId, state);
       }
 
@@ -100,22 +104,29 @@ export function useMultiSeries(containerRef: RefObject<HTMLDivElement | null>, o
       const firstTs = os.ticks[0].timestamp;
       const wasReplaced = firstTs !== state.firstTs;
 
-      if (wasReplaced || state.lastLen === 0) {
-        const data = os.ticks.map(t => ({
-          time: Math.floor(t.timestamp / 1000) as UTCTimestamp,
-          value: t.price,
-        }));
-        state.series.setData(data);
-        state.lastLen = os.ticks.length;
-        state.firstTs = firstTs;
-      } else if (os.ticks.length > state.lastLen) {
-        for (let j = state.lastLen; j < os.ticks.length; j++) {
-          state.series.update({
-            time: Math.floor(os.ticks[j].timestamp / 1000) as UTCTimestamp,
-            value: os.ticks[j].price,
-          });
+      try {
+        if (wasReplaced || state.lastLen === 0) {
+          const data = dedupTicks(os.ticks);
+          state.series.setData(data);
+          state.lastLen = os.ticks.length;
+          state.firstTs = firstTs;
+          state.lastTime = data.length > 0 ? (data[data.length - 1].time as number) : 0;
+        } else if (os.ticks.length > state.lastLen) {
+          for (let j = state.lastLen; j < os.ticks.length; j++) {
+            const time = Math.floor(os.ticks[j].timestamp / 1000) as UTCTimestamp;
+            if ((time as number) > state.lastTime) {
+              state.series.update({ time, value: os.ticks[j].price });
+              state.lastTime = time as number;
+            }
+          }
+          state.lastLen = os.ticks.length;
         }
-        state.lastLen = os.ticks.length;
+      } catch (e) {
+        // Recovery: full setData on next render
+        console.warn('Multi-series update error, will recover:', e);
+        state.lastLen = 0;
+        state.firstTs = 0;
+        state.lastTime = 0;
       }
     }
   }, [outcomeSeries]);

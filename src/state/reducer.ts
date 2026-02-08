@@ -5,6 +5,7 @@ export const MAX_OUTCOMES = 5;
 
 export type Action =
   | { type: 'SET_GROUPS'; groups: MarketGroup[] }
+  | { type: 'SYNC_PRICES'; groups: MarketGroup[] }
   | { type: 'PIN_GROUP'; group: MarketGroup }
   | { type: 'UNPIN_GROUP'; eventId: string }
   | { type: 'SET_HISTORY'; eventId: string; ticks: PriceTick[] }
@@ -43,6 +44,43 @@ export function reducer(state: AppState, action: Action): AppState {
     case 'SET_GROUPS':
       return { ...state, allGroups: action.groups };
 
+    case 'SYNC_PRICES': {
+      // Build lookup: marketId -> latest outcomePrices[0]
+      const priceMap = new Map<string, number>();
+      for (const g of action.groups) {
+        for (const m of g.markets) {
+          priceMap.set(m.id, parseFloat(m.outcomePrices[0]) || 0);
+        }
+      }
+      const now = Date.now();
+      let changed = false;
+      const newPinned = state.pinnedGroups.map(pg => {
+        if (pg.group.markets.length === 1) {
+          const newPrice = priceMap.get(pg.group.markets[0].id);
+          if (newPrice === undefined || newPrice === pg.currentPrice) return pg;
+          changed = true;
+          let newSeries = [...pg.timeSeries, { price: newPrice, timestamp: now }];
+          if (newSeries.length > MAX_TICKS) newSeries = newSeries.slice(-MAX_TICKS);
+          return { ...pg, timeSeries: newSeries, currentPrice: newPrice };
+        }
+        // Multi-market: update each outcome
+        let osChanged = false;
+        const newOs = pg.outcomeSeries.map(os => {
+          const newPrice = priceMap.get(os.marketId);
+          if (newPrice === undefined || newPrice === os.currentPrice) return os;
+          osChanged = true;
+          let newTicks = [...os.ticks, { price: newPrice, timestamp: now }];
+          if (newTicks.length > MAX_TICKS) newTicks = newTicks.slice(-MAX_TICKS);
+          return { ...os, ticks: newTicks, currentPrice: newPrice };
+        });
+        if (!osChanged) return pg;
+        changed = true;
+        return { ...pg, outcomeSeries: newOs };
+      });
+      if (!changed) return state;
+      return { ...state, allGroups: action.groups, pinnedGroups: newPinned, lastTickTime: now };
+    }
+
     case 'PIN_GROUP': {
       if (state.pinnedGroups.length >= 8) return state;
       if (state.pinnedGroups.some(p => p.group.eventId === action.group.eventId)) return state;
@@ -79,7 +117,7 @@ export function reducer(state: AppState, action: Action): AppState {
       };
       const newPinned = [...state.pinnedGroups];
       newPinned[idx] = updated;
-      return { ...state, pinnedGroups: newPinned };
+      return { ...state, pinnedGroups: newPinned, lastTickTime: lastTick.timestamp };
     }
 
     case 'SET_OUTCOME_HISTORY': {
@@ -99,7 +137,7 @@ export function reducer(state: AppState, action: Action): AppState {
       const updated: PinnedGroup = { ...existing, outcomeSeries: newOs };
       const newPinned = [...state.pinnedGroups];
       newPinned[idx] = updated;
-      return { ...state, pinnedGroups: newPinned };
+      return { ...state, pinnedGroups: newPinned, lastTickTime: action.ticks[action.ticks.length - 1].timestamp };
     }
 
     case 'PRICE_TICK': {

@@ -9,75 +9,99 @@ interface HeaderProps {
 export default function Header({ onRefresh }: HeaderProps) {
   const dispatch = useAppDispatch();
   const game = useGameScore();
-
   return (
-    <header className="flex items-center justify-between px-8 py-3 bg-white border-b border-border">
-      <div className="flex items-center gap-4">
-        <span className="text-3xl">🏈</span>
-        <h1 className="text-2xl font-black tracking-tight text-gray-900">
-          ABE'S SB LX PARTY
-        </h1>
+    <header className="relative overflow-hidden bg-gradient-to-r from-indigo-950 via-purple-900 to-indigo-950 px-8 py-4">
+      {/* Decorative background elements */}
+      <div className="absolute inset-0 opacity-10">
+        <div className="absolute top-0 left-1/4 text-[120px] leading-none select-none">🏈</div>
+        <div className="absolute bottom-0 right-1/4 text-[100px] leading-none select-none">🐰</div>
       </div>
 
-      {/* Scoreboard */}
-      {game && (
-        <div className="flex items-center gap-4">
-          {/* Away team */}
-          <div className="flex items-center gap-2">
-            <img src={game.away.logo} alt={game.away.abbreviation} className="w-10 h-10 object-contain" />
-            <div className="text-right">
-              <div className="text-xs font-semibold text-muted leading-tight">{game.away.abbreviation}</div>
-              <div className="text-3xl font-black leading-tight tabular-nums">{game.away.score}</div>
+      <div className="relative flex items-center justify-between gap-6">
+        {/* Title block */}
+        <div className="flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <span className="text-4xl">🏈</span>
+            <div>
+              <h1 className="text-2xl font-black tracking-tight text-white">
+                ABE'S SUPER BOWL LX
+              </h1>
+              <p className="text-sm font-semibold text-purple-300 tracking-widest uppercase">
+                Watch Party 🐰 🌴 🎶
+              </p>
             </div>
-          </div>
-
-          {/* Game clock */}
-          <div className="flex flex-col items-center min-w-28">
-            <div className={`text-sm font-bold px-3 py-0.5 rounded-full ${
-              game.status.name === 'STATUS_IN_PROGRESS'
-                ? 'bg-red-100 text-red-700'
-                : game.status.name === 'STATUS_HALFTIME'
-                  ? 'bg-yellow-100 text-yellow-700'
-                  : game.status.name === 'STATUS_FINAL'
-                    ? 'bg-gray-100 text-gray-600'
-                    : 'bg-blue-100 text-blue-700'
-            }`}>
-              {formatGameClock(game.status)}
-            </div>
-            {game.status.name === 'STATUS_IN_PROGRESS' && (
-              <div className="flex items-center gap-1 mt-0.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-                <span className="text-[10px] font-semibold text-red-600 uppercase tracking-wide">Live</span>
-              </div>
-            )}
-          </div>
-
-          {/* Home team */}
-          <div className="flex items-center gap-2">
-            <div className="text-left">
-              <div className="text-xs font-semibold text-muted leading-tight">{game.home.abbreviation}</div>
-              <div className="text-3xl font-black leading-tight tabular-nums">{game.home.score}</div>
-            </div>
-            <img src={game.home.logo} alt={game.home.abbreviation} className="w-10 h-10 object-contain" />
           </div>
         </div>
-      )}
 
-      <div className="flex items-center gap-3">
-        <button
-          onClick={onRefresh}
-          className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors"
-          title="Refresh markets (R)"
-        >
-          Refresh Markets
-        </button>
-        <button
-          onClick={() => dispatch({ type: 'TOGGLE_SIDEBAR' })}
-          className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition-colors"
-          title="Toggle sidebar (S)"
-        >
-          Toggle Sidebar
-        </button>
+        {/* Scoreboard */}
+        {game && (
+          <div className="flex items-center gap-5 bg-white/10 backdrop-blur-sm rounded-2xl px-6 py-3">
+            {/* Away team */}
+            <div className="flex items-center gap-3">
+              <img
+                src={game.away.logo}
+                alt={game.away.abbreviation}
+                className="w-14 h-14 object-contain drop-shadow-lg"
+              />
+              <div className="text-right">
+                <div className="text-xs font-bold text-purple-300 tracking-wide">{game.away.abbreviation}</div>
+                <div className="text-4xl font-black text-white leading-tight tabular-nums">{game.away.score}</div>
+              </div>
+            </div>
+
+            {/* Game clock */}
+            <div className="flex flex-col items-center min-w-32">
+              <div className={`text-sm font-bold px-4 py-1 rounded-full ${
+                game.status.name === 'STATUS_IN_PROGRESS'
+                  ? 'bg-red-500/80 text-white'
+                  : game.status.name === 'STATUS_HALFTIME'
+                    ? 'bg-yellow-500/80 text-white'
+                    : game.status.name === 'STATUS_FINAL'
+                      ? 'bg-white/20 text-white'
+                      : 'bg-blue-500/80 text-white'
+              }`}>
+                {formatGameClock(game.status)}
+              </div>
+              {game.status.name === 'STATUS_IN_PROGRESS' && (
+                <div className="flex items-center gap-1 mt-1">
+                  <span className="w-2 h-2 rounded-full bg-red-400 animate-pulse" />
+                  <span className="text-[10px] font-bold text-red-300 uppercase tracking-widest">Live</span>
+                </div>
+              )}
+            </div>
+
+            {/* Home team */}
+            <div className="flex items-center gap-3">
+              <div className="text-left">
+                <div className="text-xs font-bold text-purple-300 tracking-wide">{game.home.abbreviation}</div>
+                <div className="text-4xl font-black text-white leading-tight tabular-nums">{game.home.score}</div>
+              </div>
+              <img
+                src={game.home.logo}
+                alt={game.home.abbreviation}
+                className="w-14 h-14 object-contain drop-shadow-lg"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Right section: Spotify + buttons */}
+        <div className="flex items-center gap-4 flex-shrink-0">
+          <button
+            onClick={onRefresh}
+            className="px-4 py-2 bg-white/15 hover:bg-white/25 rounded-lg text-sm font-semibold text-white transition-colors"
+            title="Refresh markets (R)"
+          >
+            Refresh
+          </button>
+          <button
+            onClick={() => dispatch({ type: 'TOGGLE_SIDEBAR' })}
+            className="px-4 py-2 bg-white/15 hover:bg-white/25 rounded-lg text-sm font-semibold text-white transition-colors"
+            title="Toggle sidebar (S)"
+          >
+            Sidebar
+          </button>
+        </div>
       </div>
     </header>
   );

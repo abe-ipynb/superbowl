@@ -2,12 +2,14 @@ import { useEffect, useRef, type RefObject } from 'react';
 import { createChart, AreaSeries, type IChartApi, type ISeriesApi, type UTCTimestamp } from 'lightweight-charts';
 import type { PinnedGroup } from '../lib/types';
 import { etTickFormatter, etTooltipFormatter } from '../lib/timeFormat';
+import { dedupTicks } from '../lib/chartUtils';
 
 export function useTimeSeries(containerRef: RefObject<HTMLDivElement | null>, pinned: PinnedGroup) {
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<'Area'> | null>(null);
   const lastLenRef = useRef(0);
   const firstTsRef = useRef(0);
+  const lastTimeRef = useRef(0);
 
   // Create chart once
   useEffect(() => {
@@ -28,6 +30,7 @@ export function useTimeSeries(containerRef: RefObject<HTMLDivElement | null>, pi
       height: el.clientHeight,
       rightPriceScale: {
         borderColor: '#E5E7EB',
+        scaleMargins: { top: 0, bottom: 0 },
       },
       timeScale: {
         timeVisible: true,
@@ -55,6 +58,7 @@ export function useTimeSeries(containerRef: RefObject<HTMLDivElement | null>, pi
       },
       autoscaleInfoProvider: () => ({
         priceRange: { minValue: 0, maxValue: 1 },
+        margins: { above: 0, below: 0 },
       }),
     });
 
@@ -62,6 +66,7 @@ export function useTimeSeries(containerRef: RefObject<HTMLDivElement | null>, pi
     seriesRef.current = series;
     lastLenRef.current = 0;
     firstTsRef.current = 0;
+    lastTimeRef.current = 0;
 
     const ro = new ResizeObserver(entries => {
       for (const entry of entries) {
@@ -93,22 +98,29 @@ export function useTimeSeries(containerRef: RefObject<HTMLDivElement | null>, pi
     const firstTs = timeSeries[0].timestamp;
     const wasReplaced = firstTs !== firstTsRef.current;
 
-    if (wasReplaced || lastLenRef.current === 0) {
-      const data = timeSeries.map(t => ({
-        time: Math.floor(t.timestamp / 1000) as UTCTimestamp,
-        value: t.price,
-      }));
-      series.setData(data);
-      lastLenRef.current = timeSeries.length;
-      firstTsRef.current = firstTs;
-    } else if (timeSeries.length > lastLenRef.current) {
-      for (let i = lastLenRef.current; i < timeSeries.length; i++) {
-        series.update({
-          time: Math.floor(timeSeries[i].timestamp / 1000) as UTCTimestamp,
-          value: timeSeries[i].price,
-        });
+    try {
+      if (wasReplaced || lastLenRef.current === 0) {
+        const data = dedupTicks(timeSeries);
+        series.setData(data);
+        lastLenRef.current = timeSeries.length;
+        firstTsRef.current = firstTs;
+        lastTimeRef.current = data.length > 0 ? (data[data.length - 1].time as number) : 0;
+      } else if (timeSeries.length > lastLenRef.current) {
+        for (let i = lastLenRef.current; i < timeSeries.length; i++) {
+          const time = Math.floor(timeSeries[i].timestamp / 1000) as UTCTimestamp;
+          if ((time as number) > lastTimeRef.current) {
+            series.update({ time, value: timeSeries[i].price });
+            lastTimeRef.current = time as number;
+          }
+        }
+        lastLenRef.current = timeSeries.length;
       }
-      lastLenRef.current = timeSeries.length;
+    } catch (e) {
+      // Recovery: full setData on next render
+      console.warn('Chart update error, will recover:', e);
+      lastLenRef.current = 0;
+      firstTsRef.current = 0;
+      lastTimeRef.current = 0;
     }
 
     const isUp = currentPrice >= sessionOpenPrice;
